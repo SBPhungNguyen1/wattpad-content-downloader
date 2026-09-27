@@ -67,7 +67,7 @@
 
     previousHeight = newHeight;
 
-    // Aint increase height in the next 3 times
+    // Height doesn't increase 3 times in a row
     if (stableCount >= 3) {
       break;
     }
@@ -86,32 +86,108 @@
   }
 
   // =========================================================
-  // 5. GET ALL PARAGRAPH
+  // 5. GET ALL PARAGRAPHS
   // =========================================================
 
   const paragraphs = [...finalArticle.querySelectorAll("p[data-p-id]")]
     .map((p) => {
-      // Clone -> DOM wont affect
+      // Clone -> don't modify original DOM
       const clone = p.cloneNode(true);
 
-      // DELETE comment UI
-      clone.querySelectorAll(".component-wrapper").forEach((el) => el.remove());
+      // -------------------------------------------------------
+      // Remove comment / UI elements
+      // -------------------------------------------------------
 
-      return clone.textContent?.replace(/\u00a0/g, " ").trim() || "";
+      clone.querySelectorAll(".component-wrapper").forEach((el) => {
+        el.remove();
+      });
+
+      // -------------------------------------------------------
+      // Convert <br> to newline
+      // -------------------------------------------------------
+
+      clone.querySelectorAll("br").forEach((br) => {
+        br.replaceWith("\n");
+      });
+
+      // -------------------------------------------------------
+      // Extract text
+      // -------------------------------------------------------
+
+      let text = clone.textContent || "";
+
+      // -------------------------------------------------------
+      // Normalize text
+      // -------------------------------------------------------
+
+      text = text
+        // NBSP -> normal space
+        .replace(/\u00a0/g, " ")
+
+        // Normalize line endings
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+
+        // Remove spaces around newlines
+        .replace(/[ \t]*\n[ \t]*/g, "\n")
+
+        // Multiple spaces -> one space
+        .replace(/[ \t]{2,}/g, " ")
+
+        // Too many newlines -> max 2
+        .replace(/\n{3,}/g, "\n\n")
+
+        .trim();
+
+      return text;
     })
     .filter(Boolean);
 
   // =========================================================
-  // 6. MERGE CONTENT
+  // 6. NORMALIZE PARAGRAPHS
   // =========================================================
 
-  const content = paragraphs.join("\n\n");
+  const normalizedParagraphs = paragraphs.map((paragraph) => {
+    let text = paragraph;
+
+    /*
+     * Wattpad sometimes renders one paragraph like this:
+     *
+     * "Ngày xưa, tại một vương quốc nọ có tục lệ là người nào tới tuổi già cũng bị đuổi ra
+     * khỏi nhà."
+     *
+     * We want:
+     *
+     * "Ngày xưa, tại một vương quốc nọ có tục lệ là người nào tới tuổi già cũng bị đuổi ra khỏi nhà."
+     */
+
+    text = text
+      // Join lines when the next line continues normal text.
+      .replace(/([^\n])\n(?=[a-zà-ỹA-ZÀ-Ỹ0-9"“‘(])/g, "$1 ")
+
+      // Normalize spaces again
+      .replace(/[ \t]{2,}/g, " ")
+
+      .trim();
+
+    return text;
+  });
 
   // =========================================================
-  // 7. CREATE FILE CONTENT
+  // 7. MERGE CONTENT
+  // =========================================================
+
+  const content = normalizedParagraphs.join("\n\n");
+
+  // =========================================================
+  // 8. CREATE FILE CONTENT
   // =========================================================
 
   const fileContent = `${chapterTitle}\n\n${content}`;
+
+  // =========================================================
+  // 9. RESULT
+  // =========================================================
 
   console.log("");
   console.log("================================");
@@ -121,22 +197,22 @@
   console.log("Chapter:", chapterTitle);
   console.log("Part ID:", partId);
   console.log("URL:", chapterUrl);
-  console.log("Paragraphs:", paragraphs.length);
+  console.log("Paragraphs:", normalizedParagraphs.length);
   console.log("Characters:", content.length);
 
   console.log("");
   console.log("First paragraph:");
-  console.log(paragraphs[0]);
+  console.log(normalizedParagraphs[0]);
 
   console.log("");
   console.log("Last paragraph:");
-  console.log(paragraphs[paragraphs.length - 1]);
+  console.log(normalizedParagraphs[normalizedParagraphs.length - 1]);
 
   // =========================================================
-  // 8. DOWNLOAD TXT
+  // 10. DOWNLOAD TXT
   // =========================================================
 
-  // Windows aint allow those file name
+  // Windows doesn't allow:
   // < > : " / \ | ? *
 
   const safeFileName = chapterTitle
@@ -171,7 +247,7 @@
   console.log("📥 DOWNLOADED FILE:", fileName);
 
   // =========================================================
-  // 9. RETURN
+  // 11. RETURN
   // =========================================================
 
   return {
@@ -179,7 +255,7 @@
     url: chapterUrl,
     title: chapterTitle,
     fileName,
-    paragraphs,
+    paragraphs: normalizedParagraphs,
     content: fileContent,
   };
 })();
